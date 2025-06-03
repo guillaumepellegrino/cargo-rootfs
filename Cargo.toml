@@ -2,10 +2,15 @@
 name = "cargo-rootfs"
 version = "0.1.0"
 edition = "2021"
+description = "Install or release a package in the rootfs, including extra files or directories"
+readme = "README.md"
+repository = "https://github.com/guillaumepellegrino/cargo-rootfs"
+license = "MIT"
+authors = ["Guillaume Pellegrino <guillaume.pellegrino@yahoo.com>"]
+keywords = ["plugin", "cargo", "build"]
+categories = ["cargo-plugins"]
 
 [dependencies]
 cargo_metadata = "0.19.2"
 camino = "1.1.9"
 serde_json = "1.0.140"
-serde = "1.0.219"
-colored = "3.0.0"
