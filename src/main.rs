@@ -22,6 +22,7 @@ pub struct CargoRootfsArgs {
     // Options:
     dst: Option<PathBuf>,
     altsrc: Option<PathBuf>,
+    target: Option<String>,
     all_bins_only: bool,
     bins_only: Vec<String>,
     lib_only: bool,
@@ -115,12 +116,26 @@ fn recursive_copy(src: &Path, dst: &Path, mode: Option<u32>, depth: i32) {
     }
 }
 
+fn strip(file: &Path) {
+    let program = std::env::var("STRIP")
+        .unwrap_or("strip".into());
+    println!("{} {}", program, file);
+
+    std::process::Command::new(program)
+        .arg(file)
+        .output()
+        .expect("strip error");
+}
+
 impl CargoRootfs {
     pub fn new(args: &CargoRootfsArgs) -> Self {
         let metadata = args.metadata();
 
         let mut outdir = PathBuf::from(&metadata.target_directory);
-        if let Ok(toolchain) = std::env::var("CARGO_BUILD_TARGET") {
+        if let Some(toolchain) = &args.target {
+            outdir.push(toolchain);
+        }
+        else if let Ok(toolchain) = std::env::var("CARGO_BUILD_TARGET") {
             outdir.push(toolchain);
         }
         outdir.push("release");
@@ -182,9 +197,11 @@ impl CargoRootfs {
         }
 
         let root_bin = root_package.targets.iter().find(
-            |target| target.kind.contains(&cargo_metadata::TargetKind::Bin))
-            .unwrap_or_else(|| panic!("[{}] No Binary targets", package.name));
-
+            |target| target.kind.contains(&cargo_metadata::TargetKind::Bin));
+        let root_bin = match root_bin {
+            Some(x) => x,
+            None => return,
+        };
 
         for target in &package.targets {
             if !target.kind.contains(&cargo_metadata::TargetKind::Bin) {
@@ -194,7 +211,7 @@ impl CargoRootfs {
             let original = &root_bin.name;
             let link = self.dst.join("usr/bin").join(&target.name);
 
-            println!("ln -s {:#?} {:#?}", original, link);
+            println!("ln -sf {:#?} {:#?}", original, link);
             let _ = std::fs::remove_file(&link);
             return symlink(&original, &link).unwrap();
         }
@@ -218,7 +235,7 @@ impl CargoRootfs {
         if rule.symbolic == Some(true) {
             let original = rule_src;
             let link = self.get_destination_file(rule_dst);
-            println!("ln -s {:#?} {:#?}", original, link);
+            println!("ln -sf {:#?} {:#?}", original, link);
             let _ = std::fs::remove_file(&link);
             return symlink(&original, &link).unwrap();
         }
@@ -234,7 +251,7 @@ impl CargoRootfs {
             if let Some(order) = &init.start {
                 let rcdir = self.dst.join("etc/rc1.d");
                 let link = rcdir.join(format!("S{order}{name}"));
-                println!("ln -s {:#?} {:#?}", original, link);
+                println!("ln -sf {:#?} {:#?}", original, link);
                 std::fs::create_dir_all(&rcdir).unwrap();
                 let _ = std::fs::remove_file(&link);
                 symlink(&original, &link).unwrap();
@@ -242,7 +259,7 @@ impl CargoRootfs {
             if let Some(order) = &init.stop {
                 let rcdir = self.dst.join("etc/rc6.d");
                 let link = rcdir.join(format!("K{order}{name}"));
-                println!("ln -s {:#?} {:#?}", original, link);
+                println!("ln -sf {:#?} {:#?}", original, link);
                 std::fs::create_dir_all(&rcdir).unwrap();
                 let _ = std::fs::remove_file(&link);
                 symlink(&original, &link).unwrap();
@@ -275,6 +292,10 @@ impl CargoRootfs {
         let src = self.outdir.join(filename);
         let dst = self.dst.join("usr/bin").join(filename);
         recursive_copy(&src, &dst, Some(0o0755), 0);
+
+        if self.command == Command::Release {
+            strip(&dst);
+        }
     }
 
     pub fn install_bins(&self) {
@@ -416,6 +437,9 @@ impl CargoRootfsArgs {
                 },
                 "-s"|"--altsrc" => {
                     self.altsrc = Some(PathBuf::from(args.next().unwrap()));
+                },
+                "--target" => {
+                    self.target = Some(args.next().unwrap());
                 },
                 "--help"|"-h" => help(),
                 "--verbose"|"-v" => self.verbose += 1,
