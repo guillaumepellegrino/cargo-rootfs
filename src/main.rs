@@ -236,6 +236,9 @@ impl CargoRootfs {
             let original = rule_src;
             let link = self.get_destination_file(rule_dst);
             println!("ln -sf {:#?} {:#?}", original, link);
+            if let Some(linkdir) = link.parent() {
+                std::fs::create_dir_all(&linkdir).unwrap();
+            }
             let _ = std::fs::remove_file(&link);
             return symlink(&original, &link).unwrap();
         }
