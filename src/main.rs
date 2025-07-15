@@ -301,10 +301,31 @@ impl CargoRootfs {
         }
     }
 
+    pub fn get_features(&self) -> &Vec<String> {
+        let resolve = &self.metadata.resolve.as_ref().unwrap();
+        let node_root_id = resolve.root.as_ref().unwrap();
+        let root = resolve.nodes.iter().find(|node| node.id == *node_root_id).unwrap();
+        &root.features
+    }
+
+    pub fn is_target_enabled(&self, target: &cargo_metadata::Target) -> bool {
+        let features = self.get_features();
+        for req_feature in &target.required_features {
+            if !features.contains(req_feature) {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn install_bins(&self) {
         for package in self.metadata.workspace_packages() {
             for target in &package.targets {
                 if target.kind.contains(&cargo_metadata::TargetKind::Bin) {
+                    if !self.is_target_enabled(target) {
+                        println!("{} is not enabled", target.name);
+                        continue;
+                    }
                     self.install_bin(&target.name);
                 }
             }
@@ -324,6 +345,10 @@ impl CargoRootfs {
                 if target.kind.contains(&cargo_metadata::TargetKind::DyLib)
                     || target.kind.contains(&cargo_metadata::TargetKind::CDyLib)
                 {
+                    if !self.is_target_enabled(target) {
+                        println!("{} is not enabled", target.name);
+                        continue;
+                    }
                     self.install_lib(&target.name);
                 }
             }
