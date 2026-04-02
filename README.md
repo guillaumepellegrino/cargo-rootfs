@@ -10,34 +10,36 @@ Install package in the rootfs, stripping debug symbols.
 
 ## I.i) Options
 ```
-  -d, --dest <DIRECTORY>      Rootfs directory (default: /)
-  -s, --altsrc <DIRECTORY>    Use an an alternative sources for files to install.
-      --target <TRIPLE>       Install for target triple
-  -v, --verbose               Use verbose output
-  -h, --help                  Print help
+  -d, --dest <DIRECTORY>           Rootfs directory (default: /)
+  -s, --altsrc <DIRECTORY>         Use an an alternative sources for files to install.
+      --target <TRIPLE>            Install for target triple
+  -S, --init-start-dir <DIRECTORY> Init start script directory (default: /etc/rc1.d)
+  -K, --init-stop-dir <DIRECTORY>  Init stop script directory (default: /etc/rc6.d)
+  -v, --verbose                    Use verbose output
+  -h, --help                       Print help
 ```
 
 ## I.ii) Target Selection
 ```
-      --lib                   Install only this package's library
-      --bins                  Install all binaries
-      --bin [<NAME>]          Install only the specified binary
+      --lib                        Install only this package's library
+      --bins                       Install all binaries
+      --bin [<NAME>]               Install only the specified binary
 ```
 
 ## I.iii) Feature Selection
 ```
-  -F, --features <FEATURES>   Space or comma separated list of features to activate
-      --all-features          Activate all available features
-      --no-default-features   Do not activate the `default` feature
+  -F, --features <FEATURES>        Space or comma separated list of features to activate
+      --all-features               Activate all available features
+      --no-default-features        Do not activate the `default` feature
 ```
 
 ## I.iv) Manifest Options
 ```
-      --manifest-path <PATH>  Path to Cargo.toml
-      --lockfile-path <PATH>  Path to Cargo.lock (unstable)
-      --locked                Assert that `Cargo.lock` will remain unchanged
-      --offline               Run without accessing the network
-      --frozen                Equivalent to specifying both --locked and --offline
+      --manifest-path <PATH>       Path to Cargo.toml
+      --lockfile-path <PATH>       Path to Cargo.lock (unstable)
+      --locked                     Assert that `Cargo.lock` will remain unchanged
+      --offline                    Run without accessing the network
+      --frozen                     Equivalent to specifying both --locked and --offline
 ```
 
 ## I.v) Environment variables

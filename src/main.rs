@@ -26,6 +26,8 @@ pub struct CargoRootfsArgs {
     all_bins_only: bool,
     bins_only: Vec<String>,
     lib_only: bool,
+    init_startdir: Option<PathBuf>,
+    init_stopdir: Option<PathBuf>,
     verbose: u32,
 
     // Feature Selection:
@@ -46,6 +48,8 @@ pub struct CargoRootfs {
     altsrc: Option<PathBuf>,
     metadata: cargo_metadata::Metadata,
     outdir: PathBuf,
+    init_startdir: PathBuf,
+    init_stopdir: PathBuf,
 }
 
 #[derive(Debug,Clone,PartialEq, Deserialize)]
@@ -140,12 +144,23 @@ impl CargoRootfs {
         }
         outdir.push("release");
 
+        let init_startdir = match &args.init_startdir {
+            Some(x) => x.clone(),
+            None => PathBuf::from("/etc/rc1.d"),
+        };
+        let init_stopdir = match &args.init_stopdir {
+            Some(x) => x.clone(),
+            None => PathBuf::from("/etc/rc6.d"),
+        };
+
         Self {
             command: args.command,
             dst: args.dst.clone().unwrap_or("/".into()),
             altsrc: args.altsrc.clone(),
             metadata,
             outdir,
+            init_startdir,
+            init_stopdir,
         }
     }
 
@@ -188,6 +203,18 @@ impl CargoRootfs {
         // join() does not work on absolute path. We must strip the '/' character.
         let destination = destination.strip_prefix("/").unwrap_or(destination);
         self.dst.join(destination)
+    }
+
+    fn get_dst_startdir(&self) -> PathBuf {
+        let dir = self.init_startdir.strip_prefix("/")
+            .expect("--init-start-dir MUST be an absolute path");
+        self.dst.join(dir)
+    }
+
+    fn get_dst_stopdir(&self) -> PathBuf {
+        let dir = self.init_stopdir.strip_prefix("/")
+            .expect("--init-stop-dir MUST be an absolute path");
+        self.dst.join(dir)
     }
 
     fn root_crate_symlink_bin(&self, package: &cargo_metadata::Package) {
@@ -252,7 +279,7 @@ impl CargoRootfs {
             let name = rule_dst.file_name().unwrap();
             let original = PathBuf::from("../init.d").join(&name);
             if let Some(order) = &init.start {
-                let rcdir = self.dst.join("etc/rc1.d");
+                let rcdir = self.get_dst_startdir();
                 let link = rcdir.join(format!("S{order}{name}"));
                 println!("ln -sf {:#?} {:#?}", original, link);
                 std::fs::create_dir_all(&rcdir).unwrap();
@@ -260,7 +287,7 @@ impl CargoRootfs {
                 symlink(&original, &link).unwrap();
             }
             if let Some(order) = &init.stop {
-                let rcdir = self.dst.join("etc/rc6.d");
+                let rcdir = self.get_dst_stopdir();
                 let link = rcdir.join(format!("K{order}{name}"));
                 println!("ln -sf {:#?} {:#?}", original, link);
                 std::fs::create_dir_all(&rcdir).unwrap();
@@ -361,7 +388,7 @@ pub fn printusage(cmd: &str) {
 }
 
 pub fn printopt(opt: &str, comment: &str) {
-    println!("  {:<30} {}", opt.cyan().bold(), comment);
+    println!("  {:<32} {}", opt.cyan().bold(), comment);
 }
 
 pub fn help() {
@@ -379,6 +406,8 @@ pub fn help() {
     printopt("-d, --dest <DIRECTORY>", "Rootfs directory (default: /)");
     printopt("-s, --altsrc <DIRECTORY>", "Use an an alternative sources for files to install.");
     printopt("    --target <TRIPLE>", "Install for target triple");
+    printopt("-S, --init-start-dir <DIRECTORY>", "Init start script directory (default: /etc/rc1.d)");
+    printopt("-K, --init-stop-dir <DIRECTORY>", "Init stop script directory (default: /etc/rc6.d)");
     printopt("-v, --verbose", "Use verbose output");
     printopt("-h, --help", "Print help");
     println!("");
@@ -468,6 +497,12 @@ impl CargoRootfsArgs {
                 },
                 "--target" => {
                     self.target = Some(args.next().unwrap());
+                },
+                "-S"|"--init-start-dir" => {
+                    self.init_startdir = Some(PathBuf::from(args.next().unwrap()));
+                },
+                "-K"|"--init-stop-dir" => {
+                    self.init_stopdir = Some(PathBuf::from(args.next().unwrap()));
                 },
                 "--help"|"-h" => help(),
                 "--verbose"|"-v" => self.verbose += 1,
