@@ -3,15 +3,16 @@ use camino::Utf8Path as Path;
 use camino::Utf8PathBuf as PathBuf;
 use std::fs::Permissions;
 use std::os::unix::fs::{PermissionsExt, symlink};
-use serde::Deserialize;
+use serde::{Serialize,Deserialize};
 use colored::Colorize;
 
-#[derive(Default,Debug,Copy,Clone,PartialEq)]
+#[derive(Default,Debug,Copy,Clone,PartialEq,Serialize,Deserialize)]
 enum Command {
     #[default]
     None,
     Install,
     Release,
+    DeserializeCmd,
     //Info,
 }
 
@@ -39,7 +40,7 @@ pub struct CargoRootfsArgs {
     frozen: bool,
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct CargoRootfs {
     command: Command,
     dst: PathBuf,
@@ -446,6 +447,11 @@ impl CargoRootfsArgs {
                     self.command = Command::Release;
                     break;
                 },
+                "deserialize_cmd" => {
+                    self.command = Command::DeserializeCmd;
+                    break;
+                },
+
                 "--help"|"-h" => return help(),
                 other => panic!("Unknown argument {}", other),
             }
@@ -527,7 +533,19 @@ fn main() {
     let mut args = CargoRootfsArgs::default();
     args.parse();
 
+    let cargo_rootfs = match args.command {
+        Cargo::DeserializeCmd => {
+            //CargoRootfs::desezialize_from_stdin(),
+            todo!();
+        },
+        _ => CargoRootfs::new(&args),
+    };
+
     let cargo_rootfs = CargoRootfs::new(&args);
+
+    // If user is non-root and we are trying to install stuff to /
+    // we try to escalate priviledges with:
+    //   serialize_json(CargoRootfs) | sudo -E /proc/self/exe deserialize_cmd
 
     if args.all_bins_only {
         cargo_rootfs.install_bins();
