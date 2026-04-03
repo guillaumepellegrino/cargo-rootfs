@@ -98,12 +98,7 @@ fn recursive_copy(src: &Path, dst: &Path, mode: Option<u32>, depth: i32) {
         }
     }
     else if src.is_dir() {
-        println!("install -d {} {:#?} {:#?}", strmode(mode), src, dst);
         std::fs::create_dir_all(dst).unwrap();
-        if let Some(mode) = mode {
-            let perms = Permissions::from_mode(mode);
-            std::fs::set_permissions(dst, perms).unwrap();
-        }
         for dir in src.read_dir_utf8().unwrap() {
             let dir = dir.unwrap();
             let name = dir.file_name();
