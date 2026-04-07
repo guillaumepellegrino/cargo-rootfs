@@ -1,12 +1,12 @@
-use serde_json::value::Value;
 use camino::Utf8Path as Path;
 use camino::Utf8PathBuf as PathBuf;
-use std::fs::Permissions;
-use std::os::unix::fs::{PermissionsExt, symlink};
-use serde::Deserialize;
 use colored::Colorize;
+use serde::Deserialize;
+use serde_json::value::Value;
+use std::fs::Permissions;
+use std::os::unix::fs::{symlink, PermissionsExt};
 
-#[derive(Default,Debug,Copy,Clone,PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 enum Command {
     #[default]
     None,
@@ -15,7 +15,7 @@ enum Command {
     //Info,
 }
 
-#[derive(Default,Debug,Clone)]
+#[derive(Default, Debug, Clone)]
 struct CargoRootfsArgs {
     command: Command,
 
@@ -41,7 +41,7 @@ struct CargoRootfsArgs {
     frozen: bool,
 }
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct CargoRootfs {
     command: Command,
     dst: PathBuf,
@@ -52,13 +52,13 @@ struct CargoRootfs {
     init_stopdir: PathBuf,
 }
 
-#[derive(Debug,Clone,PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 struct InitScript {
     start: Option<u32>,
     stop: Option<u32>,
 }
 
-#[derive(Debug,Clone,PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 struct CargoRootfsRule {
     destination: Option<PathBuf>,
     source: Option<PathBuf>,
@@ -71,8 +71,7 @@ struct CargoRootfsRule {
 fn strmode(mode: Option<u32>) -> String {
     if let Some(mode) = mode {
         format!("-m 0{mode:0o}")
-    }
-    else {
+    } else {
         String::new()
     }
 }
@@ -89,15 +88,13 @@ fn recursive_copy(src: &Path, dst: &Path, mode: Option<u32>, depth: i32) {
         std::fs::create_dir_all(dstdir)
             .unwrap_or_else(|e| panic!("Failed to create directory {dstdir}: {e:?}"));
 
-        std::fs::copy(src, dst)
-            .unwrap_or_else(|e| panic!("Failed to copy {src} to {dst}: {e:?}"));
+        std::fs::copy(src, dst).unwrap_or_else(|e| panic!("Failed to copy {src} to {dst}: {e:?}"));
 
         if let Some(mode) = mode {
             let perms = Permissions::from_mode(mode);
             std::fs::set_permissions(dst, perms).unwrap();
         }
-    }
-    else if src.is_dir() {
+    } else if src.is_dir() {
         std::fs::create_dir_all(dst).unwrap();
         for dir in src.read_dir_utf8().unwrap() {
             let dir = dir.unwrap();
@@ -109,15 +106,13 @@ fn recursive_copy(src: &Path, dst: &Path, mode: Option<u32>, depth: i32) {
             let dst = dst.join(&name);
             recursive_copy(&src, &dst, mode, depth + 1);
         }
-    }
-    else {
+    } else {
         panic!("Artifact {src:?} not found")
     }
 }
 
 fn strip(file: &Path) {
-    let program = std::env::var("STRIP")
-        .unwrap_or("strip".into());
+    let program = std::env::var("STRIP").unwrap_or("strip".into());
     println!("{} {}", program, file);
 
     std::process::Command::new(program)
@@ -133,8 +128,7 @@ impl CargoRootfs {
         let mut outdir = PathBuf::from(&metadata.target_directory);
         if let Some(toolchain) = &args.target {
             outdir.push(toolchain);
-        }
-        else if let Ok(toolchain) = std::env::var("CARGO_BUILD_TARGET") {
+        } else if let Ok(toolchain) = std::env::var("CARGO_BUILD_TARGET") {
             outdir.push(toolchain);
         }
         outdir.push("release");
@@ -160,10 +154,12 @@ impl CargoRootfs {
     }
 
     fn get_root_package(&self) -> &cargo_metadata::Package {
-        let resolve = self.metadata.resolve.as_ref()
+        let resolve = self
+            .metadata
+            .resolve
+            .as_ref()
             .expect("Failed to resolve dependencies graph");
-        let root = resolve.root.as_ref()
-            .expect("No root package");
+        let root = resolve.root.as_ref().expect("No root package");
         self.get_package(root)
     }
 
@@ -176,9 +172,10 @@ impl CargoRootfs {
         panic!("Could not find {id}");
     }
 
-
     fn get_manifest_dir(&self, package: &cargo_metadata::Package) -> PathBuf {
-        let manifest_dir = package.manifest_path.parent()
+        let manifest_dir = package
+            .manifest_path
+            .parent()
             .unwrap_or_else(|| panic!("[{}] Failed to get manifest directory", package.name));
         PathBuf::from(manifest_dir)
     }
@@ -201,13 +198,17 @@ impl CargoRootfs {
     }
 
     fn get_dst_startdir(&self) -> PathBuf {
-        let dir = self.init_startdir.strip_prefix("/")
+        let dir = self
+            .init_startdir
+            .strip_prefix("/")
             .expect("--init-start-dir MUST be an absolute path");
         self.dst.join(dir)
     }
 
     fn get_dst_stopdir(&self) -> PathBuf {
-        let dir = self.init_stopdir.strip_prefix("/")
+        let dir = self
+            .init_stopdir
+            .strip_prefix("/")
             .expect("--init-stop-dir MUST be an absolute path");
         self.dst.join(dir)
     }
@@ -218,8 +219,10 @@ impl CargoRootfs {
             return;
         }
 
-        let root_bin = root_package.targets.iter().find(
-            |target| target.kind.contains(&cargo_metadata::TargetKind::Bin));
+        let root_bin = root_package
+            .targets
+            .iter()
+            .find(|target| target.kind.contains(&cargo_metadata::TargetKind::Bin));
         let root_bin = match root_bin {
             Some(x) => x,
             None => return,
@@ -242,19 +245,36 @@ impl CargoRootfs {
         }
     }
 
-    fn interpret_metadata_rule(&self, package: &cargo_metadata::Package, i: usize, rule: &CargoRootfsRule) {
+    fn interpret_metadata_rule(
+        &self,
+        package: &cargo_metadata::Package,
+        i: usize,
+        rule: &CargoRootfsRule,
+    ) {
         if rule.root_crate_symlink == Some(true) {
             self.root_crate_symlink_bin(&package);
             return;
         }
 
-        let rule_src = rule.source.as_ref()
-            .unwrap_or_else(|| panic!("[{}] Missing package.metadata.rootfs.[{i}].src", package.name));
-        let rule_dst = rule.destination.as_ref()
-            .unwrap_or_else(|| panic!("[{}] Missing package.metadata.rootfs.[{i}].dst", package.name));
+        let rule_src = rule.source.as_ref().unwrap_or_else(|| {
+            panic!(
+                "[{}] Missing package.metadata.rootfs.[{i}].src",
+                package.name
+            )
+        });
+        let rule_dst = rule.destination.as_ref().unwrap_or_else(|| {
+            panic!(
+                "[{}] Missing package.metadata.rootfs.[{i}].dst",
+                package.name
+            )
+        });
         let mode = rule.permissions.as_ref().map(|mode| {
-            u32::from_str_radix(mode, 8)
-                .unwrap_or_else(|_| panic!("[{}] package.metadata.rootfs.[{i}].mode is not an octal number", package.name))
+            u32::from_str_radix(mode, 8).unwrap_or_else(|_| {
+                panic!(
+                    "[{}] package.metadata.rootfs.[{i}].mode is not an octal number",
+                    package.name
+                )
+            })
         });
 
         if rule.symbolic == Some(true) {
@@ -266,8 +286,7 @@ impl CargoRootfs {
             }
             let _ = std::fs::remove_file(&link);
             return symlink(&original, &link).unwrap();
-        }
-        else {
+        } else {
             let src = self.get_source_file(&package, rule_src);
             let dst = self.get_destination_file(rule_dst);
             recursive_copy(&src, &dst, mode, 0);
@@ -299,15 +318,20 @@ impl CargoRootfs {
         if let Value::Array(dep_metadata) = &package.metadata["rootfs"] {
             let name = &package.name;
             for (i, rule) in dep_metadata.iter().enumerate() {
-                let rule: CargoRootfsRule = serde_json::from_value(rule.clone())
-                    .unwrap_or_else(|e| panic!("[{name}] Failed to parse package.metadata.rootfs.[{i}]: {e:?}"));
+                let rule: CargoRootfsRule =
+                    serde_json::from_value(rule.clone()).unwrap_or_else(|e| {
+                        panic!("[{name}] Failed to parse package.metadata.rootfs.[{i}]: {e:?}")
+                    });
                 self.interpret_metadata_rule(package, i, &rule);
             }
         }
     }
 
     fn install_dependencies(&self) {
-        let resolve = self.metadata.resolve.as_ref()
+        let resolve = self
+            .metadata
+            .resolve
+            .as_ref()
             .expect("Failed to resolve dependencies graph");
 
         for node in &resolve.nodes {
@@ -327,7 +351,10 @@ impl CargoRootfs {
     }
 
     fn get_medatadata_node(&self, package: &cargo_metadata::PackageId) -> &cargo_metadata::Node {
-        let resolve = self.metadata.resolve.as_ref()
+        let resolve = self
+            .metadata
+            .resolve
+            .as_ref()
             .expect("cargo could not resolve the dependencies");
         &resolve[package]
     }
@@ -337,7 +364,11 @@ impl CargoRootfs {
         &node.features
     }
 
-    pub fn is_target_enabled(&self, package_id: &cargo_metadata::PackageId, target: &cargo_metadata::Target) -> bool {
+    pub fn is_target_enabled(
+        &self,
+        package_id: &cargo_metadata::PackageId,
+        target: &cargo_metadata::Target,
+    ) -> bool {
         let enabled_features = self.get_enabled_features(package_id);
         let required_features = &target.required_features;
         for required_feature in required_features {
@@ -407,10 +438,19 @@ fn help() {
     println!("");
     println!("{}", "Options:".green().bold());
     printopt("-d, --dest <DIRECTORY>", "Rootfs directory (default: /)");
-    printopt("-s, --altsrc <DIRECTORY>", "Use an an alternative sources for files to install.");
+    printopt(
+        "-s, --altsrc <DIRECTORY>",
+        "Use an an alternative sources for files to install.",
+    );
     printopt("    --target <TRIPLE>", "Install for target triple");
-    printopt("-S, --init-start-dir <DIRECTORY>", "Init start script directory (default: /etc/rc1.d)");
-    printopt("-K, --init-stop-dir <DIRECTORY>", "Init stop script directory (default: /etc/rc6.d)");
+    printopt(
+        "-S, --init-start-dir <DIRECTORY>",
+        "Init start script directory (default: /etc/rc1.d)",
+    );
+    printopt(
+        "-K, --init-stop-dir <DIRECTORY>",
+        "Init stop script directory (default: /etc/rc6.d)",
+    );
     printopt("-v, --verbose", "Use verbose output");
     printopt("-h, --help", "Print help");
     println!("");
@@ -420,16 +460,31 @@ fn help() {
     printopt("    --bin [<NAME>]", "Install only the specified binary");
     println!("");
     println!("{}", "Feature Selection:".green().bold());
-    printopt("-F, --features <FEATURES>", "Space or comma separated list of features to activate");
+    printopt(
+        "-F, --features <FEATURES>",
+        "Space or comma separated list of features to activate",
+    );
     printopt("    --all-features", "Activate all available features");
-    printopt("    --no-default-features", "Do not activate the `default` feature");
+    printopt(
+        "    --no-default-features",
+        "Do not activate the `default` feature",
+    );
     println!("");
     println!("{}", "Manifest Options:".green().bold());
     printopt("    --manifest-path <PATH>", "Path to Cargo.toml");
-    printopt("    --lockfile-path <PATH>", "Path to Cargo.lock (unstable)");
-    printopt("    --locked", "Assert that `Cargo.lock` will remain unchanged");
+    printopt(
+        "    --lockfile-path <PATH>",
+        "Path to Cargo.lock (unstable)",
+    );
+    printopt(
+        "    --locked",
+        "Assert that `Cargo.lock` will remain unchanged",
+    );
     printopt("    --offline", "Run without accessing the network");
-    printopt("    --frozen", "Equivalent to specifying both --locked and --offline");
+    printopt(
+        "    --frozen",
+        "Equivalent to specifying both --locked and --offline",
+    );
 }
 
 impl CargoRootfsArgs {
@@ -456,8 +511,7 @@ impl CargoRootfsArgs {
             other_options.push("--frozen".into());
         }
         cmd.other_options(other_options);
-        cmd.exec()
-            .unwrap_or_else(|e| panic!("{e}"))
+        cmd.exec().unwrap_or_else(|e| panic!("{e}"))
     }
 
     fn parse(&mut self) {
@@ -469,16 +523,16 @@ impl CargoRootfsArgs {
         // Parse the command name
         while let Some(arg) = args.next() {
             match arg.as_str() {
-                "rootfs" => {},
+                "rootfs" => {}
                 "install" => {
                     self.command = Command::Install;
                     break;
-                },
+                }
                 "release" => {
                     self.command = Command::Release;
                     break;
-                },
-                "--help"|"-h" => return help(),
+                }
+                "--help" | "-h" => return help(),
                 other => panic!("Unknown argument {}", other),
             }
         }
@@ -492,68 +546,71 @@ impl CargoRootfsArgs {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 // options
-                "-d"|"--dest" => {
+                "-d" | "--dest" => {
                     self.dst = Some(PathBuf::from(args.next().unwrap()));
-                },
-                "-s"|"--altsrc" => {
+                }
+                "-s" | "--altsrc" => {
                     self.altsrc = Some(PathBuf::from(args.next().unwrap()));
-                },
+                }
                 "--target" => {
                     self.target = Some(args.next().unwrap());
-                },
-                "-S"|"--init-start-dir" => {
+                }
+                "-S" | "--init-start-dir" => {
                     self.init_startdir = Some(PathBuf::from(args.next().unwrap()));
-                },
-                "-K"|"--init-stop-dir" => {
+                }
+                "-K" | "--init-stop-dir" => {
                     self.init_stopdir = Some(PathBuf::from(args.next().unwrap()));
-                },
-                "--help"|"-h" => help(),
-                "--verbose"|"-v" => self.verbose += 1,
+                }
+                "--help" | "-h" => help(),
+                "--verbose" | "-v" => self.verbose += 1,
 
                 // target selections:
                 "--lib" => {
                     self.lib_only = true;
-                },
+                }
                 "--bins" => {
                     self.all_bins_only = true;
-                },
+                }
                 "--bin" => {
                     self.bins_only.push(args.next().unwrap());
-                },
+                }
 
                 // feature selection:
-                "-F"|"--features" => {
-                    let features = args.next()
+                "-F" | "--features" => {
+                    let features = args
+                        .next()
                         .unwrap()
                         .split(",")
                         .map(|x| x.to_string())
                         .collect();
-                    self.features.push(cargo_metadata::CargoOpt::SomeFeatures(features));
-                },
+                    self.features
+                        .push(cargo_metadata::CargoOpt::SomeFeatures(features));
+                }
                 "--all-features" => {
                     self.features.push(cargo_metadata::CargoOpt::AllFeatures);
-                },
+                }
                 "--no-default-features" => {
-                    self.features.push(cargo_metadata::CargoOpt::NoDefaultFeatures);
+                    self.features
+                        .push(cargo_metadata::CargoOpt::NoDefaultFeatures);
                     //self.no_default_features = true;
-                },
+                }
 
                 // manifest options:
                 "--manifest-path" => {
                     self.manifest_path = Some(PathBuf::from(args.next().unwrap()));
-                },
+                }
                 "--lockfile-path" => {
                     self.lockfile_path = Some(args.next().unwrap());
-                },
+                }
                 "--locked" => {
                     self.locked = true;
-                },
+                }
                 "--offline" => {
                     self.offline = true;
-                },
+                }
                 "--frozen" => {
                     self.frozen = true;
-                },
+                }
 
                 other => panic!("Unknown argument {}", other),
             }
