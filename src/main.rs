@@ -16,7 +16,7 @@ enum Command {
 }
 
 #[derive(Default,Debug,Clone)]
-pub struct CargoRootfsArgs {
+struct CargoRootfsArgs {
     command: Command,
 
     // Options:
@@ -42,7 +42,7 @@ pub struct CargoRootfsArgs {
 }
 
 #[derive(Debug,Clone,PartialEq)]
-pub struct CargoRootfs {
+struct CargoRootfs {
     command: Command,
     dst: PathBuf,
     altsrc: Option<PathBuf>,
@@ -53,13 +53,13 @@ pub struct CargoRootfs {
 }
 
 #[derive(Debug,Clone,PartialEq, Deserialize)]
-pub struct InitScript {
+struct InitScript {
     start: Option<u32>,
     stop: Option<u32>,
 }
 
 #[derive(Debug,Clone,PartialEq, Deserialize)]
-pub struct CargoRootfsRule {
+struct CargoRootfsRule {
     destination: Option<PathBuf>,
     source: Option<PathBuf>,
     permissions: Option<String>,
@@ -229,13 +229,16 @@ impl CargoRootfs {
             if !target.kind.contains(&cargo_metadata::TargetKind::Bin) {
                 continue;
             }
+            if !self.is_target_enabled(&package.id, target) {
+                continue;
+            }
 
             let original = &root_bin.name;
             let link = self.dst.join("usr/bin").join(&target.name);
 
             println!("ln -sf {:#?} {:#?}", original, link);
             let _ = std::fs::remove_file(&link);
-            return symlink(&original, &link).unwrap();
+            symlink(&original, &link).unwrap();
         }
     }
 
@@ -303,7 +306,7 @@ impl CargoRootfs {
         }
     }
 
-    pub fn install_dependencies(&self) {
+    fn install_dependencies(&self) {
         let resolve = self.metadata.resolve.as_ref()
             .expect("Failed to resolve dependencies graph");
 
@@ -313,7 +316,7 @@ impl CargoRootfs {
         }
     }
 
-    pub fn install_bin(&self, filename: &str) {
+    fn install_bin(&self, filename: &str) {
         let src = self.outdir.join(filename);
         let dst = self.dst.join("usr/bin").join(filename);
         recursive_copy(&src, &dst, Some(0o0755), 0);
@@ -323,28 +326,33 @@ impl CargoRootfs {
         }
     }
 
-    pub fn get_features(&self) -> &Vec<String> {
-        let resolve = &self.metadata.resolve.as_ref().unwrap();
-        let node_root_id = resolve.root.as_ref().unwrap();
-        let root = resolve.nodes.iter().find(|node| node.id == *node_root_id).unwrap();
-        &root.features
+    fn get_medatadata_node(&self, package: &cargo_metadata::PackageId) -> &cargo_metadata::Node {
+        let resolve = self.metadata.resolve.as_ref()
+            .expect("cargo could not resolve the dependencies");
+        &resolve[package]
     }
 
-    pub fn is_target_enabled(&self, target: &cargo_metadata::Target) -> bool {
-        let features = self.get_features();
-        for req_feature in &target.required_features {
-            if !features.contains(req_feature) {
+    fn get_enabled_features(&self, package: &cargo_metadata::PackageId) -> &Vec<String> {
+        let node = self.get_medatadata_node(package);
+        &node.features
+    }
+
+    pub fn is_target_enabled(&self, package_id: &cargo_metadata::PackageId, target: &cargo_metadata::Target) -> bool {
+        let enabled_features = self.get_enabled_features(package_id);
+        let required_features = &target.required_features;
+        for required_feature in required_features {
+            if !enabled_features.contains(required_feature) {
                 return false;
             }
         }
         true
     }
 
-    pub fn install_bins(&self) {
+    fn install_bins(&self) {
         for package in self.metadata.workspace_packages() {
             for target in &package.targets {
                 if target.kind.contains(&cargo_metadata::TargetKind::Bin) {
-                    if !self.is_target_enabled(target) {
+                    if !self.is_target_enabled(&package.id, target) {
                         println!("{} is not enabled", target.name);
                         continue;
                     }
@@ -354,20 +362,20 @@ impl CargoRootfs {
         }
     }
 
-    pub fn install_lib(&self, name: &str) {
+    fn install_lib(&self, name: &str) {
         let filename = format!("lib{name}.so");
         let src = self.outdir.join(&filename);
         let dst = self.dst.join("usr/lib").join(&filename);
         recursive_copy(&src, &dst, Some(0o0755), 0);
     }
 
-    pub fn install_libs(&self) {
+    fn install_libs(&self) {
         for package in self.metadata.workspace_packages() {
             for target in &package.targets {
                 if target.kind.contains(&cargo_metadata::TargetKind::DyLib)
                     || target.kind.contains(&cargo_metadata::TargetKind::CDyLib)
                 {
-                    if !self.is_target_enabled(target) {
+                    if !self.is_target_enabled(&package.id, target) {
                         println!("{} is not enabled", target.name);
                         continue;
                     }
@@ -378,15 +386,15 @@ impl CargoRootfs {
     }
 }
 
-pub fn printusage(cmd: &str) {
+fn printusage(cmd: &str) {
     println!("{} {}", "Usage:".green().bold(), cmd.cyan().bold());
 }
 
-pub fn printopt(opt: &str, comment: &str) {
+fn printopt(opt: &str, comment: &str) {
     println!("  {:<32} {}", opt.cyan().bold(), comment);
 }
 
-pub fn help() {
+fn help() {
     println!("Install or release a package in the rootfs, including extra files or directories specified with {} in the manifest ({}) from the root package itself or any of its dependencies.",
         "[[package.metadata.rootfs]]".cyan().bold(),
         "Cargo.toml".cyan().bold());
