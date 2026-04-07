@@ -102,8 +102,8 @@ fn recursive_copy(src: &Path, dst: &Path, mode: Option<u32>, depth: i32) {
             if name.starts_with(".") {
                 continue;
             }
-            let src = src.join(&name);
-            let dst = dst.join(&name);
+            let src = src.join(name);
+            let dst = dst.join(name);
             recursive_copy(&src, &dst, mode, depth + 1);
         }
     } else {
@@ -215,7 +215,7 @@ impl CargoRootfs {
 
     fn root_crate_symlink_bin(&self, package: &cargo_metadata::Package) {
         let root_package = self.get_root_package();
-        if &root_package.name == &package.name {
+        if root_package.name == package.name {
             return;
         }
 
@@ -241,7 +241,7 @@ impl CargoRootfs {
 
             println!("ln -sf {:#?} {:#?}", original, link);
             let _ = std::fs::remove_file(&link);
-            symlink(&original, &link).unwrap();
+            symlink(original, &link).unwrap();
         }
     }
 
@@ -252,7 +252,7 @@ impl CargoRootfs {
         rule: &CargoRootfsRule,
     ) {
         if rule.root_crate_symlink == Some(true) {
-            self.root_crate_symlink_bin(&package);
+            self.root_crate_symlink_bin(package);
             return;
         }
 
@@ -282,19 +282,19 @@ impl CargoRootfs {
             let link = self.get_destination_file(rule_dst);
             println!("ln -sf {:#?} {:#?}", original, link);
             if let Some(linkdir) = link.parent() {
-                std::fs::create_dir_all(&linkdir).unwrap();
+                std::fs::create_dir_all(linkdir).unwrap();
             }
             let _ = std::fs::remove_file(&link);
-            return symlink(&original, &link).unwrap();
+            return symlink(original, &link).unwrap();
         } else {
-            let src = self.get_source_file(&package, rule_src);
+            let src = self.get_source_file(package, rule_src);
             let dst = self.get_destination_file(rule_dst);
             recursive_copy(&src, &dst, mode, 0);
         }
 
         if let Some(init) = &rule.init {
             let name = rule_dst.file_name().unwrap();
-            let original = PathBuf::from("../init.d").join(&name);
+            let original = PathBuf::from("../init.d").join(name);
             if let Some(order) = &init.start {
                 let rcdir = self.get_dst_startdir();
                 let link = rcdir.join(format!("S{order}{name}"));
@@ -336,7 +336,7 @@ impl CargoRootfs {
 
         for node in &resolve.nodes {
             let package = self.get_package(&node.id);
-            self.install_dependency(&package);
+            self.install_dependency(package);
         }
     }
 
@@ -429,13 +429,13 @@ fn help() {
     println!("Install or release a package in the rootfs, including extra files or directories specified with {} in the manifest ({}) from the root package itself or any of its dependencies.",
         "[[package.metadata.rootfs]]".cyan().bold(),
         "Cargo.toml".cyan().bold());
-    println!("");
+    println!();
     printusage("cargo rootfs install [OPTIONS]");
     println!("Install package in the rootfs, keeping debug symbols.");
-    println!("");
+    println!();
     printusage("cargo rootfs release [OPTIONS]");
     println!("Install package in the rootfs, keeping debug symbols.");
-    println!("");
+    println!();
     println!("{}", "Options:".green().bold());
     printopt("-d, --dest <DIRECTORY>", "Rootfs directory (default: /)");
     printopt(
@@ -453,12 +453,12 @@ fn help() {
     );
     printopt("-v, --verbose", "Use verbose output");
     printopt("-h, --help", "Print help");
-    println!("");
+    println!();
     println!("{}", "Target Selection:".green().bold());
     printopt("    --lib", "Install only this package's library");
     printopt("    --bins", "Install all binaries");
     printopt("    --bin [<NAME>]", "Install only the specified binary");
-    println!("");
+    println!();
     println!("{}", "Feature Selection:".green().bold());
     printopt(
         "-F, --features <FEATURES>",
@@ -469,7 +469,7 @@ fn help() {
         "    --no-default-features",
         "Do not activate the `default` feature",
     );
-    println!("");
+    println!();
     println!("{}", "Manifest Options:".green().bold());
     printopt("    --manifest-path <PATH>", "Path to Cargo.toml");
     printopt(
@@ -521,7 +521,7 @@ impl CargoRootfsArgs {
         args.next();
 
         // Parse the command name
-        while let Some(arg) = args.next() {
+        for arg in args.by_ref() {
             match arg.as_str() {
                 "rootfs" => {}
                 "install" => {
